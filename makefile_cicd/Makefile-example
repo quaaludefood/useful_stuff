@@ -1,0 +1,126 @@
+E2E_TEST_DIR=../test_dir
+CODE_DIRS= core fetch_tasks tests
+# get image tag based on CI_COMMIT_TAG (if exists) or CI_COMMIT_REF_SLUG (if exists) or current git branch
+#
+export GIT_BRANCH_TAG=$(shell git rev-parse --abbrev-ref HEAD | sed -r 's/[\/]+/-/g' | sed -r 's/feature-//g')
+export IMAGE_TAG=$(if $(CI_COMMIT_TAG),$(CI_COMMIT_TAG),$(if $(CI_COMMIT_REF_SLUG),$(CI_COMMIT_REF_SLUG),$(GIT_BRANCH_TAG)))
+export SLEEP_TIME=$(if $(CI_COMMIT_REF_SLUG), 5, 0) #sleep 5 seconds for CI/CD to allow db to start
+export COLORED=$(if $(CI_COMMIT_REF_SLUG), , -it)
+
+REQUIRED_VARS=FLASK_PORT \
+	FLASK_ENV \
+	FLASK_APP_SECRET_KEY \
+	JWT_SECRET \
+	#... etc/
+
+API_URI?=http://localhost:8000/api
+
+ZAP_SCAN_API_URI_NO_SCHEME := $(shell echo $(API_URI) | sed s/'http[s]\?:\/\/'//)
+
+init-repo:
+	cp .env.example .env
+	touch $@
+
+check-required-vars: init-repo
+	echo "IMAGE_TAG: $(IMAGE_TAG)"
+	missing_vars=""
+	for var in $(REQUIRED_VARS); do \
+        if ! $$( printenv | grep $$var | grep -qv "PLEASE_SET_ME") && ! $$( cat .env | grep $$var | grep -qv "PLEASE_SET_ME"); then \
+            missing_vars+=" $$var"; \
+        fi; \
+    done; \
+    if [ -n "$$missing_vars" ]; then \
+        echo "Missing environment variables:$$missing_vars"; \
+        exit 1; \
+    fi
+
+install-requirements: init-repo
+	poetry --version || echo "Please install poetry -> 'pip install poetry'"
+	poetry install
+	touch $@
+
+lint: install-requirements
+	poetry run flake8 $(CODE_DIRS)
+	poetry run isort --check-only $(CODE_DIRS)
+	poetry run black --check $(CODE_DIRS)
+
+format: install-requirements
+	poetry run isort $(CODE_DIRS)
+	poetry run black $(CODE_DIRS)
+
+
+
+build: init-repo .docker-network-create check-required-vars
+	docker-compose build --parallel --force-rm
+
+up: init-repo .docker-network-create check-required-vars
+	docker-compose up -d --remove-orphans
+
+logs: init-repo
+	docker-compose logs
+
+logs-tail: init-repo
+	docker-compose logs -f
+
+down: init-repo check-required-vars
+	docker-compose down
+
+build-and-run: down build up migrate-head
+
+clean-and-run: down build up
+
+.docker-network-create:
+	# create docker network for microservices if it does not exist
+	docker network inspect my_network >/dev/null 2>&1 || \
+    docker network create --driver bridge my_network
+
+#=============================================================
+# Deployment make commands - should be used in CI/CD
+
+build-image: .docker-network-create check-required-vars
+	make build
+	@docker login -u $(CI_REGISTRY_USER) -p $(CI_REGISTRY_PASSWORD) $(CI_REGISTRY) && \
+	docker-compose push
+
+
+
+comma := ,
+deploy: check-required-vars 
+	echo "DOCKER_DEPLOY_HOST: $(DOCKER_DEPLOY_HOST)"
+	@for ip in $(subst $(comma), ,$(DOCKER_DEPLOY_HOST)); do \
+		echo "Deploying to $$ip" && \
+		export DOCKER_HOST=tcp://$$ip && \
+		docker login -u $(CI_REGISTRY_USER) -p $(CI_REGISTRY_PASSWORD) $(CI_REGISTRY) && \
+		docker-compose pull && \
+		make down up migrate-head; \
+	done
+
+#=============================================================
+# DB and migration related commands
+
+db: ## make sure db is up and running
+	if test "$(ENVIRONMENT)" == "staging" || test "$(ENVIRONMENT)" == "prod"; then \
+		echo "Skipping running db container for env $(ENVIRONMENT)"; \
+	else \
+		docker start my_sql_db; \
+		$(call await,docker exec -T my_sql_db pg_isready) \
+	fi
+
+require-name:
+ifndef NAME
+	$(error Please run "make create-revision NAME=<migration name>")
+endif
+
+create-revision: db require-name
+	cd migration && alembic -c alembic.ini revision -m '$(NAME)'
+
+migrate-up: db
+	docker exec $ $(MY_MIGRATION_CONTAINER) alembic -c alembic.ini upgrade +1
+
+migrate-down: db
+	docker exec $(MY_MIGRATION_CONTAINER) alembic -c alembic.ini downgrade -1
+
+migrate-head: db
+	docker exec $(MY_MIGRATION_CONTAINER) alembic -c alembic.ini upgrade head
+
+

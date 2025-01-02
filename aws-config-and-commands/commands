@@ -1,0 +1,38 @@
+***BEGIN
+source ~/.bashrc
+
+EXAMPLE:
+alias awsmyalias="aws --endpoint-url https://my.endpoint.ac.uk"
+
+
+awsmyalias --profile my_profile s3 ls
+awsmyalias --profile my_profile s3api create-bucket --bucket my-bucket
+awsmyalias --profile my_profile s3api get-bucket-cors --bucket my-bucket
+awsmyalias --profile my_profile s3 rm s3://my-bucket/policy-test.json
+awsmyalias --profile my_profile s3api get-bucket-cors --bucket my-bucket
+awsmyalias --profile my_profile s3 cp policy-test.json s3://my-bucket/
+awsmyalias --profile my_profile s3api put-bucket-policy --bucket my-bucket --policy file://policy-test.json
+
+aws --endpoint-url https://my.endpoint.ac.uk --profile my_profile s3api put-bucket-policy --bucket my-bucket --policy file://policy-test.json
+
+EXAMPLE POLICY:
+
+
+{
+    "CORSRules": [
+        {
+            "AllowedMethods": [
+                "GET",
+                "HEAD"
+            ],
+            "AllowedOrigins": [
+                "http://000.00.00.000:8000",
+                "http://localhost:8000",
+                "https://my-url.com"
+            ],
+            "ExposeHeaders": [
+                "Access-Control-Allow-Origin"
+            ]
+        }
+    ]
+}
