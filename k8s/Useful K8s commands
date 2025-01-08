@@ -1,0 +1,80 @@
+Useful K8s commands
+
+PODS
+source /Users/pm22/.bashrc
+kubectl get all
+kubectl run -i --tty busybox --image=busybox --restart=Never -- sh
+kubectl run nginx --image=nginx
+kubectl describe po busybox
+k delete pod/busybox
+k exec -it sleepy-busybox sh
+
+CONTROLLERS
+Kubectl create -f rc-definition.yaml
+Kubectl get replicationcontroller
+
+REPLICATIONSETS
+Kubectl create -f replicaset-definition.yaml
+Kubectl scale --replicas=6 replicaset-definition.yaml
+Kubectl scale --replicas=6 replicaset myapp-replicaset
+
+
+DEPLOYMENTS
+Kubectl get all
+
+NAMESPACES
+mysql.connect(‘db-service’)
+mysql.connect(‘db-service.dev.svc.cluster.local’)
+Kubectl create namespace dev
+Kubectl get pods --namespace=kube-system
+Kubectl create -f pod-definition.yml --namespace=dev
+Kubectl config set-context $(kubectl config current-context) --namespace=dev
+Kubectl get pods --namespace=dev
+Kubectl get pods --all-namespaces
+Kubectl create -f compute-quota.yaml
+kubectl describe po blue --namespace=marketing
+
+IMPERATIVE COMMANDS
+
+kubectl run nginx --image=nginx --dry-run=client -o yaml > nginx-pod.yaml 
+kubectl run redis --image=redis:alpine --labels tier=db --dry-run=client -o yaml
+#Create a service redis-service to expose the redis application within the cluster on port 6379
+kubectl expose pod redis --port=6379 --name redis-service service/redis-service exposed
+kubectl run custom-nginx --image=nginx --port=8080
+
+
+DOCKER IMAGES
+docker build Dockerfile -t mmumsha/my-custom-app
+#Push image to public Docker Registry
+docker push mmumsha/my-custom-app
+docker images
+#Build a docker image using the Dockerfile and name it webapp-colo
+docker build Dockerfile -t webapp-color
+#Run an instance of the image webapp-color and publish port 8080 on the container to 8282 on the host.
+docker run -p 8282:8000 webapp-color
+
+DOCKER CONTAINERS
+docker run ubuntu sleep 5
+
+ENVIRONMENT VARIABLES & CONFIGMAPS
+docker run -e APP_COLOR=pink simple-webapp-color
+kubectl create configmap \
+app-config --from-literal=APP_COLOR=blue
+kubectl get configmaps
+kubectl describe configmaps
+
+SECRETS
+#Imperitive:
+kubectl create secret generic \
+app-secret --from-literal=DB_Host=mysql
+#From file:
+kubectl create secret generic \
+Aap-secret --from-file=app_secret.properties
+echo -n ‘your-word’ | base64
+echo -n 'your-encoded-word’ | base64 --decode
+kubectl get secrets
+kubectl describe secrets
+kubectl get secret app-secret -o yaml
+
+ETC.
+Kubectl replace -f replicaset-definition.yaml

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-pod
+spec:
+  containers:
+    - name: app-container
+      image: kodekloud/simple-webapp-color
+    resources:
+      requests:
+        memory: "100Mi"
+        cpu: "200m"
+      limits: 
+        memory: "200Mi"
+        cpu: "500m"
